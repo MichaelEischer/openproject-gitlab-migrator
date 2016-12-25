@@ -295,29 +295,40 @@ try:
     con = open_database_connection()
     users = get_users(con)
     print("Found {} users".format(len(users)))
-    project_id = get_project_id(con, 'regelung')
+
+    project_id = get_project_id(con, 'software')
     print("Project id {}".format(project_id))
+
     milestones = get_issue_milestones(con, project_id)
-    print("Milestones:")
-    for (mid, milestone) in milestones.items():
-        print("    {}: {}".format(mid, milestone))
+    print("Milestones")
+    for milestone in milestones.values():
+        print("    {}".format(milestone['name']))
+
     types = get_issue_types(con)
-    print("Types {}".format(types))
+    print("Types")
+    for type in types.values():
+        print("    {}".format(type['name']))
     categories = get_issue_categories(con, project_id)
-    print("Categories {}".format(categories))
+    print("Categories")
+    for category in categories.values():
+        print("    {}".format(category['name']))
     statuses = get_issue_statuses(con)
-    print("Statuses {}".format(statuses))
+    print("Statuses")
+    for status in statuses.values():
+        print("    {}".format(status['name']))
+
     issues = get_issues(con, project_id, categories, statuses, types,
             users)
     print("Issues")
     for (iid, issue) in issues.items():
-        print("    {} {}".format(iid, issue))
+        print("    {} {}".format(iid, issue['title']))
+
     boards = get_boards(con, project_id, users)
     print("Boards")
     for (board_id, board) in boards.items():
         print("    {} {}".format(board_id, board['name']))
         for (iid, issue) in board['issues'].items():
-            print("        {} {}".format(iid, issue))
+            print("        {} {}".format(iid, issue['title']))
 
 except mysql.connector.Error as e:
     print("Error {}: {}".format(e.args[0], e.args[1]))
