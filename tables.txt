@@ -1,0 +1,38 @@
+Interessante Tabellen:
+Benutzer:
+  users (login, mail, first+lastname)
+  Berechtigungen + Gruppen müssen neu konfiguriert werden
+  custom_values ???
+
+Projektliste:
+  + projects -> Projekte und Gruppen per Default auf private!
+
+Work packages:
+  + versions (Milestones)
+  + types (Bug type -> label)
+  + categories (Name -> label)
+  + statuses (Open / Closed / Rejected)
+
+  + work_package_journals
+  + watchers
+  + relations
+  hierarchy
+
+Forum:
+  + boards
+  + messages + message_journals (-> Issues vom Type discussion)
+
+Wiki:
+  wiki_redirects ? -> direkt in Wiki-Artikel reinpatchen?
+  wiki_pages (Titel zu Name)
+  wiki_content_journals + wiki_contents
+  wikis (mapping, nur beim dumpen)
+
+Meetings:
+  meetings + meeting_contents + meeting_content_journals (-> Wikieinträge)
+
+Dateianhänge:
+  attachments + attachments_journals + attachable_journals (1 change : many files)
+
+news_journals + news ???
+colors?
