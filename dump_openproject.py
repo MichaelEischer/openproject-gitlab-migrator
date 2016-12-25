@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import datetime
+import json
 import mysql.connector
 import sys
 
@@ -9,7 +11,7 @@ def open_database_connection():
             host='localhost')
 
 
-def get_users(dbcon):
+def get_users(con):
     cur = con.cursor()
     try:
         cur.execute("SELECT `id`, `login`, `firstname`, `lastname`, "
@@ -32,7 +34,7 @@ def get_users(dbcon):
     return results
 
 
-def get_project_id(dbcon, identifier):
+def get_project_id(con, identifier):
     cur = con.cursor()
     try:
         cur.execute("SELECT `id` FROM `projects` "
@@ -46,7 +48,7 @@ def get_project_id(dbcon, identifier):
     return data[0]
 
 
-def get_issue_milestones(dbcon, project_id):
+def get_issue_milestones(con, project_id):
     cur = con.cursor()
     try:
         cur.execute("SELECT `id`, `name`, `description`, `start_date`, "
@@ -68,7 +70,7 @@ def get_issue_milestones(dbcon, project_id):
     return results
 
 
-def get_issue_types(dbcon):
+def get_issue_types(con):
     cur = con.cursor()
     try:
         cur.execute("SELECT `id`, `name` FROM `types`")
@@ -85,7 +87,7 @@ def get_issue_types(dbcon):
     return results
 
 
-def get_issue_categories(dbcon, project_id):
+def get_issue_categories(con, project_id):
     cur = con.cursor()
     try:
         cur.execute("SELECT `id`, `name` FROM `categories`"
@@ -102,7 +104,7 @@ def get_issue_categories(dbcon, project_id):
     return results
 
 
-def get_issue_statuses(dbcon):
+def get_issue_statuses(con):
     cur = con.cursor()
     try:
         cur.execute("SELECT `id`, `name`, `is_closed` FROM `statuses`")
@@ -165,7 +167,7 @@ def deduplicate_issue_action(issue, new_action, protected_attributes):
     return new_action
 
 
-def get_issues(dbcon, project_id, category_map, status_map, type_map,
+def get_issues(con, project_id, category_map, status_map, type_map,
         user_map):
     cur = con.cursor()
     try:
@@ -235,7 +237,7 @@ def get_issues(dbcon, project_id, category_map, status_map, type_map,
     return results
 
 
-def get_board_messages(dbcon, board_id, user_map):
+def get_board_messages(con, board_id, user_map):
     cur = con.cursor()
     try:
         cur.execute("SELECT `id`, `parent_id`, `subject`, `content`, "
@@ -253,7 +255,7 @@ def get_board_messages(dbcon, board_id, user_map):
                 'description': row[3],
                 'assignee_id': None,
                 'milestone_id': None,
-                'labels': ['Discussion'],
+                'labels': ['discussion'],
                 'is_closed': row[6] == 1,
                 'author_id': user_map[row[4]]['login'],
                 'created_at': row[5],
@@ -273,7 +275,7 @@ def get_board_messages(dbcon, board_id, user_map):
     return results
 
 
-def get_boards(dbcon, project_id, user_map):
+def get_boards(con, project_id, user_map):
     cur = con.cursor()
     try:
         cur.execute("SELECT `id`, `name` FROM `boards`"
@@ -286,54 +288,91 @@ def get_boards(dbcon, project_id, user_map):
     for row in data:
         results[row[0]] = {
             'name': row[1],
-            'issues': get_board_messages(dbcon, row[0], user_map)
+            'issues': get_board_messages(con, row[0], user_map)
         }
     return results
 
 
-try:
-    con = open_database_connection()
-    users = get_users(con)
-    print("Found {} users".format(len(users)))
+def dump_project(name, verbose=False):
+    try:
+        con = open_database_connection()
+        users = get_users(con)
+        if verbose:
+            print("Found {} users".format(len(users)))
 
-    project_id = get_project_id(con, 'software')
-    print("Project id {}".format(project_id))
+        project_id = get_project_id(con, 'software')
+        if verbose:
+            print("Project id {}".format(project_id))
 
-    milestones = get_issue_milestones(con, project_id)
-    print("Milestones")
-    for milestone in milestones.values():
-        print("    {}".format(milestone['name']))
+        milestones = get_issue_milestones(con, project_id)
+        if verbose:
+            print("Milestones")
+            for milestone in milestones.values():
+                print("    {}".format(milestone['name']))
 
-    types = get_issue_types(con)
-    print("Types")
-    for type in types.values():
-        print("    {}".format(type['name']))
-    categories = get_issue_categories(con, project_id)
-    print("Categories")
-    for category in categories.values():
-        print("    {}".format(category['name']))
-    statuses = get_issue_statuses(con)
-    print("Statuses")
-    for status in statuses.values():
-        print("    {}".format(status['name']))
+        types = get_issue_types(con)
+        if verbose:
+            print("Types")
+            for type in types.values():
+                print("    {}".format(type['name']))
+        categories = get_issue_categories(con, project_id)
+        if verbose:
+            print("Categories")
+            for category in categories.values():
+                print("    {}".format(category['name']))
+        statuses = get_issue_statuses(con)
+        if verbose:
+            print("Statuses")
+            for status in statuses.values():
+                print("    {}".format(status['name']))
 
-    issues = get_issues(con, project_id, categories, statuses, types,
-            users)
-    print("Issues")
-    for (iid, issue) in issues.items():
-        print("    {} {}".format(iid, issue['title']))
+        issues = get_issues(con, project_id, categories, statuses,
+                types, users)
+        if verbose:
+            print("Issues")
+            for (iid, issue) in issues.items():
+                print("    {} {}".format(iid, issue['title']))
 
-    boards = get_boards(con, project_id, users)
-    print("Boards")
-    for (board_id, board) in boards.items():
-        print("    {} {}".format(board_id, board['name']))
-        for (iid, issue) in board['issues'].items():
-            print("        {} {}".format(iid, issue['title']))
+        boards = get_boards(con, project_id, users)
+        if verbose:
+            print("Boards")
+            for (board_id, board) in boards.items():
+                print("    {} {}".format(board_id, board['name']))
+                for (iid, issue) in board['issues'].items():
+                    print("        {} {}".format(iid, issue['title']))
 
-except mysql.connector.Error as e:
-    print("Error {}: {}".format(e.args[0], e.args[1]))
-    sys.exit(1)
+        data = {
+            'users': users,
+            'milestones': milestones,
+            'issues': issues,
+            'boards': boards
+        }
+        return data
 
-finally:
-    if con:
-        con.close()
+    except mysql.connector.Error as e:
+        print("Error {}: {}".format(e.args[0], e.args[1]))
+        sys.exit(1)
+
+    finally:
+        if con:
+            con.close()
+
+
+class DateEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime.datetime):
+            return obj.isoformat()
+        elif isinstance(obj, datetime.date):
+            return obj.isoformat()
+        return super().default(obj)
+
+
+def write_data(fn, data):
+    with open(fn, 'w') as f:
+        json.dump(data, f, cls=DateEncoder, indent=2)
+
+
+if __name__ == '__main__':
+    project_name = 'software'
+    data = dump_project(project_name, True)
+    write_data(project_name + '.json', data)
