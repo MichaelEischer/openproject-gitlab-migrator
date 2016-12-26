@@ -136,6 +136,8 @@ def convert_issue_results(row, category_map, status_map, type_map,
         'due_date': row[11],
         'notes': row[12]
     }
+    if issue['assignee_id'] is not None:
+        issue['assignee_id'] = user_map[issue['assignee_id']]['login']
     if row[5] is not None:
         issue['labels'].append(category_map[row[5]]['name'])
     if status_map[row[7]]['add_label']:
@@ -217,7 +219,7 @@ def get_issues(con, project_id, category_map, status_map, type_map,
 
     for row in data:
         if row[0] in results:
-            results[row[0]]['watcher_ids'].append(row[1])
+            results[row[0]]['watcher_ids'].append(user_map[row[1]]['login'])
 
     cur = con.cursor()
     try:
