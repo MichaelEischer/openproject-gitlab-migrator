@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import datetime
 import json
 import mysql.connector
@@ -295,14 +296,14 @@ def get_boards(con, project_id, user_map):
     return results
 
 
-def dump_project(name, verbose=False):
+def dump_project(project_name, verbose=False):
     try:
         con = open_database_connection()
         users = get_users(con)
         if verbose:
             print("Found {} users".format(len(users)))
 
-        project_id = get_project_id(con, 'software')
+        project_id = get_project_id(con, project_name)
         if verbose:
             print("Project id {}".format(project_id))
 
@@ -375,6 +376,9 @@ def write_data(fn, data):
 
 
 if __name__ == '__main__':
-    project_name = 'software'
-    data = dump_project(project_name, True)
-    write_data(project_name + '.json', data)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('project_name')
+    args = parser.parse_args()
+
+    data = dump_project(args.project_name, True)
+    write_data(args.project_name + '.json', data)
