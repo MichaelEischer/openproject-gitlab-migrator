@@ -61,10 +61,10 @@ def get_issue_milestones(con, project_id):
     results = {}
     for row in data:
         results[row[0]] = {
-            'name': row[1],
+            'title': row[1],
             'description': row[2],
             'start_date': row[3],
-            'end_date': row[4],
+            'due_date': row[4],
             'is_closed': row[5] == 'closed'
         }
     return results
@@ -128,7 +128,7 @@ def convert_issue_results(row, category_map, status_map, type_map,
         'description': row[2],
         'assignee_id': row[3],
         'milestone_id': row[4],
-        'labels': [type_map[row[6]]['name']],
+        'labels': [type_map[row[6]]['name'].lower()],
         'is_closed': status_map[row[7]]['is_closed'],
         'author_id': user_map[row[8]]['login'],
         'created_at': row[9],
@@ -310,7 +310,7 @@ def dump_project(name, verbose=False):
         if verbose:
             print("Milestones")
             for milestone in milestones.values():
-                print("    {}".format(milestone['name']))
+                print("    {}".format(milestone['title']))
 
         types = get_issue_types(con)
         if verbose:
