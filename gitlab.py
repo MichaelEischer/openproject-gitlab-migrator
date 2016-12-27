@@ -26,6 +26,9 @@ class GitlabClient:
         response.raise_for_status()
         return response.json()
 
+    def delete(self, address, **kwargs):
+        return self._request(requests.delete, address, **kwargs)
+
     def get(self, address, **kwargs):
         # FIXME handle pagination???
         return self._request(requests.get, address, **kwargs)
@@ -92,6 +95,7 @@ def get_milestone_map(client, milestones):
 
 
 def create_issue(client, issue, milestone_map, user_map):
+    # FIXME convert issue description
     # labels are automatically created on demand
     result = client.post(
         'issues',
@@ -143,28 +147,81 @@ def create_issue(client, issue, milestone_map, user_map):
                 headers={'SUDO': user_map[action['author_id']]}
             )
 
-    # TODO handle relations -> merge into description
-    # TODO handle watchers
-    # TODO handle hierarchy
+    for watcher in issue['watcher_ids']:
+        if watcher not in user_map:
+            continue
+        try:
+            # FIXME what is the actual problem here?
+            client.post(
+                'issues/{}/subscription'.format(result['id']),
+                headers={'SUDO': user_map[watcher]}
+            )
+        except ValueError:
+            pass
+
+    # TODO handle hierarchy?
+    return (result['id'], result['iid'])
+
+
+def add_relations(client, issue, issue_id):
+    relations_text = []
+    for (name, to_id) in issue['relations']:
+        text = '{} #{}'.format(name.replace('s_inv', 'ed by'), to_id)
+        relations_text.append(text)
+    relations_text = '\n'.join(relations_text)
+    if len(relations_text) > 0:
+        issue_url = 'issues/{}'.format(issue_id)
+        result = client.get(issue_url)
+        result['description'] += '\n\n###### Relations\n' + relations_text
+        client.put(issue_url, data=result)
+
+
+def pad_issue_id(next_id, last_id):
+    while last_id + 1 < next_id:
+        result = client.post('issues', data={'title': 'TMP'})
+        client.delete('issues/{}'.format(result['id']))
+        if result['iid'] >= next_id:
+            raise ValueError("Project seems to already have issues")
+        if result['iid'] <= last_id:
+            raise AssertionError("Bad internal state {} {}".format(
+                result['iid'], last_id))
+        last_id = result['iid']
 
 
 def create_issues(client, issues, milestone_map, user_map):
-    # FIXME keep original issue id
-    for iid in [str(i) for i in sorted([int(i) for i in issues.keys()])]:
-        issue = issues[iid]
+    # iterate issues in order!
+    last_id = 0
+    id_map = {}
+    for iid in sorted([int(i) for i in issues.keys()]):
+        issue = issues[str(iid)]
         print('Creating issue {}'.format(iid))
+        pad_issue_id(iid, last_id)
+        (gitlab_id, gitlab_iid) = create_issue(client, issue,
+            milestone_map, user_map)
+        assert gitlab_iid == iid, "ID mismatch"
+        id_map[iid] = gitlab_id
+        last_id = iid
+
+    for (iid, gitlab_id) in id_map.items():
+        add_relations(client, issues[str(iid)], gitlab_id)
+
+
+def convert_board(client, board, user_map):
+    # boards have no attached milestone
+    milestone_map = {}
+    # iterate issues in order
+    for iid in sorted([int(i) for i in board.keys()]):
+        issue = board[str(iid)]
+        print('Creating board issue {}'.format(iid))
         create_issue(client, issue, milestone_map, user_map)
 
 
 def convert_boards(client, boards, user_map):
-    # boards have no attached milestone
-    milestone_map = {}
     for board in boards.values():
-        create_issues(client, board, milestone_map, user_map)
+        convert_board(client, board['issues'], user_map)
 
 
-def get_important_users(issues):
-    users = set()
+def get_issue_users(issues, users):
     for issue in issues.values():
         users.add(issue['author_id'])
         users.add(issue['assignee_id'])
@@ -172,6 +229,13 @@ def get_important_users(issues):
         for action in issue['actions']:
             users.add(issue['author_id'])
             users.add(issue.get('assignee_id'))
+
+
+def get_active_users(issues, boards):
+    users = set()
+    get_issue_users(issues, users)
+    for board in boards.values():
+        get_issue_users(board['issues'], users)
     users.discard(None)
     return users
 
@@ -198,16 +262,19 @@ if __name__ == '__main__':
     )
 
     # # create milestones
-    # create_milestones(client, data['milestones'])
+    create_milestones(client, data['milestones'])
     milestone_map = get_milestone_map(client, data['milestones'])
 
-    # print('{}'.format(get_important_users(data['issues'])))
-
+    active_users = get_active_users(data['issues'], data['boards'])
     system_client = GitlabClient(
         GitlabClient.project_to_base_url(args.project_url),
         args.auth_token
     )
     user_map = get_users(system_client)
+    unknown_users = active_users - set(user_map.keys())
+    if len(unknown_users) > 0:
+        for user in sorted(unknown_users):
+            print('Unknown user {}'.format(user))
 
     DEFAULT_USER_ID = 1
     spare_user_map = defaultdict(lambda: DEFAULT_USER_ID, user_map)
