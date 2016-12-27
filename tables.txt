@@ -16,7 +16,7 @@ Work packages:
   + work_package_journals
   + watchers
   + relations
-  hierarchy
+  + hierarchy
 
 Forum:
   + boards

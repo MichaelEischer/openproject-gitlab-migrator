@@ -195,12 +195,14 @@ def deduplicate_issue_action(issue, new_action, protected_attributes):
 def get_issues(con, project_id, category_map, status_map, type_map,
         user_map):
     cur = con.cursor()
+    parent_map = {}
     try:
         cur.execute("SELECT j.`journable_id` as `id`, w.`subject`, "
                 "w.`description`, w.`assigned_to_id`, "
                 "w.`fixed_version_id`, w.`category_id`, w.`type_id`, "
                 "w.`status_id`, j.`user_id`, j.`created_at`, "
-                "w.`start_date`, w.`due_date`, j.`notes` "
+                "w.`start_date`, w.`due_date`, j.`notes`, "
+                "w.`parent_id` "
                 "FROM `work_package_journals` w "
                 "INNER JOIN `journals` j ON w.`journal_id` = j.`id` "
                 "WHERE w.`project_id` = %s "
@@ -211,6 +213,7 @@ def get_issues(con, project_id, category_map, status_map, type_map,
         cur.close()
     results = {}
     for row in data:
+        parent_map[row[0]] = row[13]
         if row[0] not in results:
             issue = convert_issue_results(row, category_map,
                     status_map, type_map, user_map)
@@ -259,6 +262,13 @@ def get_issues(con, project_id, category_map, status_map, type_map,
             results[row[0]]['relations'].append((row[2], row[1]))
         if row[1] in results:
             results[row[1]]['relations'].append((row[2] + "_inv", row[0]))
+
+    for (issue_id, parent_id) in parent_map.items():
+        if parent_id is None:
+            continue
+        results[issue_id]['relations'].append(("parent", parent_id))
+        if parent_id in results:
+            results[parent_id]['relations'].append(("child", issue_id))
 
     for attachment in get_attachments(con, 'WorkPackage').values():
         if attachment['issue_id'] in results:

@@ -204,7 +204,6 @@ def create_issue(client, issue, milestone_map, user_map):
         except ValueError:
             pass
 
-    # TODO handle hierarchy?
     return (result['id'], result['iid'])
 
 
