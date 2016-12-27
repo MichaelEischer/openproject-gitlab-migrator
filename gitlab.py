@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os.path
 import re
 import requests
 from collections import defaultdict
@@ -94,14 +95,40 @@ def get_milestone_map(client, milestones):
     return milestone_map
 
 
+def upload_file(client, file):
+    FILE_BASE_PATH = 'file'
+    fn = os.path.join(FILE_BASE_PATH, str(file['attachment_id']),
+        file['file'])
+    file_info = {'file': (file['file'], open(fn, 'rb'))}
+    result = client.post('uploads', files=file_info)
+    return result
+
+
+def create_attachments(client, attachments):
+    results = ['\n\n###### Attachments']
+    for attachment in attachments:
+        print("Uploading attachment {}".format(attachment['file']))
+        ref = upload_file(client, attachment)
+        desc = attachment['description']
+        if desc is None:
+            desc = ''
+        results.append('{}: {}\n  {}'.format(attachment['file'],
+            desc, ref['markdown']))
+    if len(results) > 1:
+        return '\n- '.join(results)
+    return ''
+
+
 def create_issue(client, issue, milestone_map, user_map):
     # FIXME convert issue description
+    description_suffix = create_attachments(client, issue['attachments'])
+
     # labels are automatically created on demand
     result = client.post(
         'issues',
         data={
             'title': issue['title'],
-            'description': issue['description'],
+            'description': issue['description'] + description_suffix,
             'assignee_id': user_map.get(issue['assignee_id']),
             'milestone_id': milestone_map.get(issue['milestone_id']),
             'labels': ','.join(issue['labels']),
@@ -131,6 +158,8 @@ def create_issue(client, issue, milestone_map, user_map):
             if 'is_closed' in action:
                 data['state_event'] = 'close' if action['is_closed'] \
                     else 'reopen'
+            if data['description'] is not None:
+                data['description'] += description_suffix
 
             client.put(
                 'issues/{}'.format(result['id']),
@@ -138,10 +167,14 @@ def create_issue(client, issue, milestone_map, user_map):
                 headers={'SUDO': user_map[action['author_id']]}
             )
         if 'notes' in action:
+            note_suffix = ''
+            if 'attachments' in action:
+                note_suffix = create_attachments(client,
+                    action['attachments'])
             client.post(
                 'issues/{}/notes'.format(result['id']),
                 data={
-                    'body': action['notes'],
+                    'body': action['notes'] + note_suffix,
                     'created_at': action['created_at']
                 },
                 headers={'SUDO': user_map[action['author_id']]}
@@ -260,6 +293,7 @@ def get_users(system_client):
 
 
 if __name__ == '__main__':
+    # Copy attachments to file/<id>/<attachment>!
     parser = argparse.ArgumentParser()
     parser.add_argument('project_url')
     parser.add_argument('auth_token')
@@ -290,6 +324,7 @@ if __name__ == '__main__':
     DEFAULT_USER_ID = 1
     spare_user_map = defaultdict(lambda: DEFAULT_USER_ID, user_map)
     create_issues(client, data['issues'], milestone_map,
+        spare_user_map)
 
     board_milestones = map_boards_to_milestones(data['boards'])
     # create_milestones(client, board_milestones)

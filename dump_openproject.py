@@ -49,6 +49,28 @@ def get_project_id(con, identifier):
     return data[0]
 
 
+def get_attachments(con, container_type):
+    # no simple way to do this only per project
+    cur = con.cursor()
+    try:
+        cur.execute("SELECT `id` as `file_id`, `container_id` AS `id`, "
+                "`description`, `file` FROM `attachments`"
+                "WHERE `container_type` = %s",
+                (container_type,))
+        data = cur.fetchall()
+    finally:
+        cur.close()
+    results = {}
+    for row in data:
+        results[row[0]] = {
+            'attachment_id': row[0],
+            'issue_id': row[1],
+            'description': row[2],
+            'file': row[3]
+        }
+    return results
+
+
 def get_issue_milestones(con, project_id):
     cur = con.cursor()
     try:
@@ -196,6 +218,7 @@ def get_issues(con, project_id, category_map, status_map, type_map,
             issue['actions'] = []
             issue['watcher_ids'] = []
             issue['relations'] = []
+            issue['attachments'] = []
             results[row[0]] = issue
         else:
             action = convert_issue_results(row, category_map,
@@ -237,10 +260,16 @@ def get_issues(con, project_id, category_map, status_map, type_map,
         if row[1] in results:
             results[row[1]]['relations'].append((row[2] + "_inv", row[0]))
 
+    for attachment in get_attachments(con, 'WorkPackage').values():
+        if attachment['issue_id'] in results:
+            iid = attachment['issue_id']
+            results[iid]['attachments'].append(attachment)
+
     return results
 
 
 def get_board_messages(con, board_id, user_map):
+    attachments = get_attachments(con, 'Message')
     cur = con.cursor()
     try:
         cur.execute("SELECT `id`, `parent_id`, `subject`, `content`, "
@@ -253,7 +282,7 @@ def get_board_messages(con, board_id, user_map):
     results = {}
     for row in data:
         if row[1] is None:
-            results[row[0]] = {
+            data = {
                 'title': row[2],
                 'description': row[3],
                 'assignee_id': None,
@@ -266,14 +295,24 @@ def get_board_messages(con, board_id, user_map):
                 'due_date': None,
                 'actions': [],
                 'watcher_ids': [],
-                'relations': []
+                'relations': [],
+                'attachments': []
             }
+            for attachment in attachments.values():
+                if attachment['issue_id'] == row[0]:
+                    data['attachments'].append(attachment)
+            results[row[0]] = data
         else:
-            results[row[1]]['actions'].append({
+            action = {
                 'author_id': user_map[row[4]]['login'],
                 'created_at': row[5],
-                'notes': row[3]
-            })
+                'notes': row[3],
+                'attachments': []
+            }
+            for attachment in attachments.values():
+                if attachment['issue_id'] == row[0]:
+                    action['attachments'].append(attachment)
+            results[row[1]]['actions'].append(action)
 
     return results
 
