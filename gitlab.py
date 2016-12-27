@@ -121,24 +121,31 @@ def create_attachments(client, attachments):
 
 def create_issue(client, issue, milestone_map, user_map):
     # FIXME convert issue description
-    description_suffix = create_attachments(client, issue['attachments'])
+    attachment_str = create_attachments(client, issue['attachments'])
+    start_date_str = ''
+    if issue['start_date'] is not None:
+        start_date_str = '\n\n###### Start date\n' + issue['start_date']
 
     # labels are automatically created on demand
+    data = {
+        'title': issue['title'],
+        'description': issue['description'],
+        'assignee_id': user_map.get(issue['assignee_id']),
+        'milestone_id': milestone_map.get(issue['milestone_id']),
+        'labels': ','.join(issue['labels']),
+        'created_at': issue['created_at'],
+        'due_date': issue['due_date']
+    }
+    if data['description'] is None:
+        data['description'] = ''
+    data['description'] += start_date_str + attachment_str
     result = client.post(
         'issues',
-        data={
-            'title': issue['title'],
-            'description': issue['description'] + description_suffix,
-            'assignee_id': user_map.get(issue['assignee_id']),
-            'milestone_id': milestone_map.get(issue['milestone_id']),
-            'labels': ','.join(issue['labels']),
-            'created_at': issue['created_at'],
-            'due_date': issue['due_date']
-        },
+        data=data,
         headers={'SUDO': user_map[issue['author_id']]}
     )
-    # FIXME preserve start date
 
+    last_description = issue['description']
     for action in issue['actions']:
         is_only_note = set(action.keys()) == set(
             ('author_id', 'created_at', 'notes'))
@@ -158,8 +165,13 @@ def create_issue(client, issue, milestone_map, user_map):
             if 'is_closed' in action:
                 data['state_event'] = 'close' if action['is_closed'] \
                     else 'reopen'
+            if 'start_date' in action:
+                start_date_str = '\n\n###### Start date\n' + \
+                    issue['start_date']
+                data['description'] = last_description
             if data['description'] is not None:
-                data['description'] += description_suffix
+                last_description = data['description']
+                data['description'] += start_date_str + attachment_str
 
             client.put(
                 'issues/{}'.format(result['id']),
@@ -184,7 +196,7 @@ def create_issue(client, issue, milestone_map, user_map):
         if watcher not in user_map:
             continue
         try:
-            # FIXME what is the actual problem here?
+            # just ignore errors here...
             client.post(
                 'issues/{}/subscription'.format(result['id']),
                 headers={'SUDO': user_map[watcher]}
