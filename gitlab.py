@@ -197,15 +197,14 @@ def create_issue(client, issue, milestone_map, user_map):
 
 
 def add_relations(client, issue, issue_id):
-    relations_text = []
+    relations_text = ['\n\n###### Relations']
     for (name, to_id) in issue['relations']:
         text = '{} #{}'.format(name.replace('s_inv', 'ed by'), to_id)
         relations_text.append(text)
-    relations_text = '\n'.join(relations_text)
-    if len(relations_text) > 0:
+    if len(relations_text) > 1:
         issue_url = 'issues/{}'.format(issue_id)
         result = client.get(issue_url)
-        result['description'] += '\n\n###### Relations\n' + relations_text
+        result['description'] += '\n- '.join(relations_text)
         client.put(issue_url, data=result)
 
 
