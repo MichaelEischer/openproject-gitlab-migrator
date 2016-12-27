@@ -1,5 +1,10 @@
+Dependencies:
+- pandoc (use something relatively current!)
+- python3
+- python3-mysql-connector
+
 Migrationsablauf:
-- Gruppen + Projekte erstellen
+- Gruppen + Projekte erstellen, Default-Labels erstellen!
 - Benutzer erstellen, temporär als Admin setzen
 - Attachments kopieren
 - Importieren :-)

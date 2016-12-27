@@ -224,7 +224,8 @@ def create_issue(client, issue, milestone_map, user_map):
 def add_relations(client, issue, issue_id):
     relations_text = ['\n\n###### Relations']
     for (name, to_id) in issue['relations']:
-        text = '{} #{}'.format(name.replace('s_inv', 'ed by'), to_id)
+        text = '{} #{}'.format(name.replace('es_inv', 'ed by')
+            .replace('s_inv', 'ed by'), to_id)
         relations_text.append(text)
     if len(relations_text) > 1:
         issue_url = 'issues/{}'.format(issue_id)
@@ -333,8 +334,8 @@ if __name__ == '__main__':
         args.auth_token
     )
 
-    # # create milestones
-    # create_milestones(client, data['milestones'])
+    # create milestones
+    create_milestones(client, data['milestones'])
     milestone_map = get_milestone_map(client, data['milestones'])
 
     active_users = get_active_users(data['issues'], data['boards'])
@@ -354,7 +355,7 @@ if __name__ == '__main__':
         spare_user_map)
 
     board_milestones = map_boards_to_milestones(data['boards'])
-    # create_milestones(client, board_milestones)
+    create_milestones(client, board_milestones)
     board_milestone_map = get_milestone_map(client, board_milestones)
     convert_boards(client, data['boards'], board_milestone_map,
         spare_user_map)
