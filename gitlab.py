@@ -13,6 +13,24 @@ def load_data(fn):
         return json.load(f)
 
 
+COMMIT_RE = re.compile(r'commit:([0-9a-f]{8,40})([^\s]?)')
+
+
+def normalize_commit_id(match):
+    cid = match.group(1)
+    if len(cid) < 40:
+        cid = cid[:8]
+    next_char = match.group(2)
+    if not next_char == "":
+        # add whitespace after commit id
+        next_char = ' ' + next_char
+    return cid + next_char
+
+
+def fix_commit_links(text):
+    return COMMIT_RE.sub(normalize_commit_id, text)
+
+
 def convert_description(text):
     if text is None or len(text.strip()) == 0:
         return ''
@@ -21,7 +39,8 @@ def convert_description(text):
         stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     (result, err) = pandoc.communicate(text.encode())
     assert pandoc.returncode == 0
-    output = result.decode().strip().replace('commit:', '')
+    output = result.decode().strip()
+    output = fix_commit_links(output)
     return output
 
 
