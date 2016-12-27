@@ -206,9 +206,20 @@ def create_issues(client, issues, milestone_map, user_map):
         add_relations(client, issues[str(iid)], gitlab_id)
 
 
-def convert_board(client, board, user_map):
-    # boards have no attached milestone
-    milestone_map = {}
+def map_boards_to_milestones(boards):
+    milestones = {}
+    for (board_id, board) in boards.items():
+        milestones[board_id] = {
+            'title': "Board-" + board['name'],
+            'description': None,
+            'start_date': None,
+            'due_date': None,
+            'is_closed': False
+        }
+    return milestones
+
+
+def convert_board(client, board, milestone_map, user_map):
     # iterate issues in order
     for iid in sorted([int(i) for i in board.keys()]):
         issue = board[str(iid)]
@@ -216,9 +227,9 @@ def convert_board(client, board, user_map):
         create_issue(client, issue, milestone_map, user_map)
 
 
-def convert_boards(client, boards, user_map):
+def convert_boards(client, boards, milestone_map, user_map):
     for board in boards.values():
-        convert_board(client, board['issues'], user_map)
+        convert_board(client, board['issues'], milestone_map, user_map)
 
 
 def get_issue_users(issues, users):
@@ -262,7 +273,7 @@ if __name__ == '__main__':
     )
 
     # # create milestones
-    create_milestones(client, data['milestones'])
+    # create_milestones(client, data['milestones'])
     milestone_map = get_milestone_map(client, data['milestones'])
 
     active_users = get_active_users(data['issues'], data['boards'])
@@ -279,5 +290,9 @@ if __name__ == '__main__':
     DEFAULT_USER_ID = 1
     spare_user_map = defaultdict(lambda: DEFAULT_USER_ID, user_map)
     create_issues(client, data['issues'], milestone_map,
+
+    board_milestones = map_boards_to_milestones(data['boards'])
+    # create_milestones(client, board_milestones)
+    board_milestone_map = get_milestone_map(client, board_milestones)
+    convert_boards(client, data['boards'], board_milestone_map,
         spare_user_map)
-    convert_boards(client, data['boards'], spare_user_map)

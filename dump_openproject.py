@@ -257,7 +257,7 @@ def get_board_messages(con, board_id, user_map):
                 'title': row[2],
                 'description': row[3],
                 'assignee_id': None,
-                'milestone_id': None,
+                'milestone_id': board_id,
                 'labels': ['discussion'],
                 'is_closed': row[6] == 1,
                 'author_id': user_map[row[4]]['login'],
