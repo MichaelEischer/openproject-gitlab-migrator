@@ -401,10 +401,6 @@ def dump_project(project_name, verbose=False):
         }
         return data
 
-    except mysql.connector.Error as e:
-        print("Error {}: {}".format(e.args[0], e.args[1]))
-        sys.exit(1)
-
     finally:
         if con:
             con.close()
