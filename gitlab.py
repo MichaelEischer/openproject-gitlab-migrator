@@ -4,12 +4,25 @@ import json
 import os.path
 import re
 import requests
+import subprocess
 from collections import defaultdict
 
 
 def load_data(fn):
     with open(fn, 'r') as f:
         return json.load(f)
+
+
+def convert_description(text):
+    if text is None or len(text.strip()) == 0:
+        return ''
+    pandoc = subprocess.Popen(["pandoc", "-f", "textile",
+        "-t", "markdown_github", "--atx-headers"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    (result, err) = pandoc.communicate(text.encode())
+    assert pandoc.returncode == 0
+    output = result.decode().strip().replace('commit:', '')
+    return output
 
 
 class GitlabClient:
@@ -67,7 +80,7 @@ def create_milestone(client, milestone):
         'milestones',
         data={
             'title': milestone['title'],
-            'description': milestone['description'],
+            'description': convert_description(milestone['description']),
             'due_date': milestone['due_date'],
             'start_date': milestone['start_date']
         }
@@ -120,7 +133,6 @@ def create_attachments(client, attachments):
 
 
 def create_issue(client, issue, milestone_map, user_map):
-    # FIXME convert issue description
     attachment_str = create_attachments(client, issue['attachments'])
     start_date_str = ''
     if issue['start_date'] is not None:
@@ -129,7 +141,7 @@ def create_issue(client, issue, milestone_map, user_map):
     # labels are automatically created on demand
     data = {
         'title': issue['title'],
-        'description': issue['description'],
+        'description': convert_description(issue['description']),
         'assignee_id': user_map.get(issue['assignee_id']),
         'milestone_id': milestone_map.get(issue['milestone_id']),
         'labels': ','.join(issue['labels']),
@@ -165,12 +177,14 @@ def create_issue(client, issue, milestone_map, user_map):
             if 'is_closed' in action:
                 data['state_event'] = 'close' if action['is_closed'] \
                     else 'reopen'
+            if data['description'] is not None:
+                data['description'] = convert_description(data['description'])
+                last_description = data['description']
             if 'start_date' in action:
                 start_date_str = '\n\n###### Start date\n' + \
                     issue['start_date']
                 data['description'] = last_description
             if data['description'] is not None:
-                last_description = data['description']
                 data['description'] += start_date_str + attachment_str
 
             client.put(
@@ -186,7 +200,7 @@ def create_issue(client, issue, milestone_map, user_map):
             client.post(
                 'issues/{}/notes'.format(result['id']),
                 data={
-                    'body': action['notes'] + note_suffix,
+                    'body': convert_description(action['notes']) + note_suffix,
                     'created_at': action['created_at']
                 },
                 headers={'SUDO': user_map[action['author_id']]}
