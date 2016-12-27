@@ -1,7 +1,13 @@
+Migrationsablauf:
+- Gruppen + Projekte erstellen
+- Benutzer erstellen, temporär als Admin setzen
+- Attachments kopieren
+- Importieren :-)
+- Admin-Berechtigungen zurücksetzen!
+
 Interessante Tabellen:
 Benutzer:
   users (login, mail, first+lastname)
-  Berechtigungen + Gruppen müssen neu konfiguriert werden
   custom_values ???
 
 Projektliste:
