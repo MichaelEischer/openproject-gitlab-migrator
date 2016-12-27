@@ -229,7 +229,10 @@ def add_relations(client, issue, issue_id):
     if len(relations_text) > 1:
         issue_url = 'issues/{}'.format(issue_id)
         result = client.get(issue_url)
-        result['description'] += '\n- '.join(relations_text)
+        result = {
+            'description': result['description'] + '\n- '.join(relations_text),
+            'updated_at': result['updated_at']
+        }
         client.put(issue_url, data=result)
 
 
