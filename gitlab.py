@@ -31,6 +31,61 @@ def fix_commit_links(text):
     return COMMIT_RE.sub(normalize_commit_id, text)
 
 
+WIKI_LINK_RE = re.compile(r'\\\[\\\[([^\]\|]+)(\|[^\]\|]+)?\\\]\\\]')
+
+
+def normalize_wiki_link(match):
+    slug = match.group(1).replace('\\#', '#')
+    name = match.group(2)
+    if name is None:
+        name = slug.split('#')[0]
+    else:
+        name = name[1:]
+    return '[' + name + '](' + slug + ')'
+
+
+def fix_wiki_links(text):
+    return WIKI_LINK_RE.sub(normalize_wiki_link, text)
+
+
+CODE_BLOCK_RE = re.compile(r'<code class="([a-z]+)">')
+
+
+def fix_code_blocks(text):
+    # convert <code class="lua"> ... </code>
+    # to ```lua \n ... \n ```
+    lines = text.split('\n')
+    output = []
+    inside_code = False
+
+    for line in lines:
+        if not inside_code:
+            match = CODE_BLOCK_RE.match(line.strip())
+            if match is not None:
+                lang = match.group(1)
+                output.append('```' + lang)
+                inside_code = True
+            else:
+                output.append(line)
+        else:
+            if line == '':
+                output.append('')
+                continue
+
+            if len(line) < 4 or line[0:4].strip() != '':
+                output.append(line)
+                inside_code = False
+
+            line = line[4:]
+            if line.strip() == '</code>':
+                inside_code = False
+                line = '```'
+            output.append(line)
+
+    assert not inside_code
+    return '\n'.join(output)
+
+
 def convert_description(text):
     if text is None or len(text.strip()) == 0:
         return ''
@@ -41,6 +96,7 @@ def convert_description(text):
     assert pandoc.returncode == 0
     output = result.decode().strip()
     output = fix_commit_links(output)
+    output = fix_code_blocks(output)
     return output
 
 
@@ -312,6 +368,60 @@ def convert_boards(client, boards, milestone_map, user_map):
         convert_board(client, board['issues'], milestone_map, user_map)
 
 
+class SimpleGitClient:
+    def __init__(self, base_path):
+        self.cwd = base_path
+        os.makedirs(base_path)
+        self._run('init', '-q')
+
+    def _run(self, *params):
+        subprocess.check_call(['git'] + list(params), cwd=self.cwd)
+
+    @classmethod
+    def format_user(cls, full_name, email):
+        return '{} <{}>'.format(full_name, email)
+
+    def commit_file(self, fn, text, user, date):
+        with open(os.path.join(self.cwd, fn), 'wb') as f:
+            f.write(text.encode())
+        self._run('add', fn)
+        self._run('commit', '-q', '-m', 'Wiki entry',
+                '--author=' + user, '--date=' + date)
+
+    def gc(self):
+        self._run('gc', '--aggressive', '--quiet')
+
+
+def convert_wiki(wiki, project_name, users):
+    user_map = {}
+    for user in users.values():
+        user_map[user['login']] = user
+
+    repo = SimpleGitClient('{}.wiki.git'.format(project_name))
+    for (wid, page) in wiki.items():
+        fn = '{}.md'.format(page['slug'])
+        title = page['title']
+        # only add the title if it provides additional information
+        title_slug = page['title'].lower().replace(' ', '-')
+        if page['slug'] == title_slug:
+            title = None
+        last_text = None
+        print('Wiki page {}'.format(page['slug']))
+        for version in page['versions']:
+            text = fix_wiki_links(convert_description(version['text']))
+            if title is not None:
+                text = '# {}\n{}'.format(title, text)
+            if text == last_text:
+                continue
+            last_text = text
+
+            user = user_map[version['user_id']]
+            user_str = SimpleGitClient.format_user(user['name'],
+                user['mail'])
+            repo.commit_file(fn, text, user_str, version['created_at'])
+    repo.gc()
+
+
 def get_issue_users(issues, users):
     for issue in issues.values():
         users.add(issue['author_id'])
@@ -378,3 +488,7 @@ if __name__ == '__main__':
     board_milestone_map = get_milestone_map(client, board_milestones)
     convert_boards(client, data['boards'], board_milestone_map,
         spare_user_map)
+
+    project_name = os.path.splitext(
+        os.path.split(args.source_file)[1])[0]
+    convert_wiki(data['wiki'], project_name, data['users'])

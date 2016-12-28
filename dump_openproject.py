@@ -3,7 +3,7 @@ import argparse
 import datetime
 import json
 import mysql.connector
-import sys
+import re
 
 
 def open_database_connection():
@@ -345,6 +345,111 @@ def get_boards(con, project_id, user_map):
     return results
 
 
+def get_wiki_id(con, project_id):
+    cur = con.cursor()
+    try:
+        cur.execute("SELECT `id` FROM `wikis` "
+                "WHERE `project_id` = %s",
+                (project_id,))
+        data = cur.fetchone()
+    finally:
+        cur.close()
+    if data is None:
+        raise ValueError("No wiki for project with id {}".format(project_id))
+    return data[0]
+
+
+def get_wiki_redirects(con, wiki_id):
+    cur = con.cursor()
+    try:
+        cur.execute("SELECT `title`, `redirects_to` "
+                "FROM `wiki_redirects` "
+                "WHERE `wiki_id` = %s",
+                (wiki_id,))
+        data = cur.fetchall()
+    finally:
+        cur.close()
+    redirects = {}
+    for row in data:
+        if row[0] == row[1]:
+            continue
+        redirects[row[0]] = row[1]
+    return redirects
+
+
+def get_wiki_pages(con, wiki_id, user_map):
+    cur = con.cursor()
+    try:
+        cur.execute("SELECT w.`page_id`, p.`slug`, p.`title`, "
+                "w.`text`, j.`user_id`, j.`created_at` "
+                "FROM `wiki_content_journals` w "
+                "INNER JOIN `journals` j ON w.`journal_id` = j.`id` "
+                "INNER JOIN `wiki_pages` p ON w.`page_id` = p.`id` "
+                "WHERE p.`wiki_id` = %s "
+                "ORDER BY w.`id` ASC",
+                (wiki_id,))
+        data = cur.fetchall()
+    finally:
+        cur.close()
+    pages = {}
+    for row in data:
+        if row[0] not in pages:
+            # these can't change due to the query construction
+            pages[row[0]] = {
+                'slug': row[1],
+                'title': row[2],
+                'versions': [],
+                'attachments': []
+            }
+        pages[row[0]]['versions'].append({
+            'user_id': user_map[row[4]]['login'],
+            'created_at': row[5],
+            'text': row[3]
+        })
+
+    for attachment in get_attachments(con, 'WikiPage').values():
+        if attachment['issue_id'] in pages:
+            wid = attachment['issue_id']
+            pages[wid]['attachments'].append(attachment)
+
+    return pages
+
+
+WIKI_LINK_RE = re.compile(r'\[\[([^\]\|]+)(\|[^\]\|]+)?\]\]')
+
+
+def apply_wiki_redirect(text, redirects):
+    def redirect_resolver(match):
+        slug = match.group(1).split('#')
+        while slug[0] in redirects:
+            slug[0] = redirects[slug[0]]
+        name = match.group(2)
+        if name is None:
+            name = ''
+        return '[[' + '#'.join(slug) + name + ']]'
+    text = WIKI_LINK_RE.sub(redirect_resolver, text)
+    return text
+
+
+def apply_wiki_redirects(pages, redirects):
+    for (wid, page) in pages.items():
+        for version in page['versions']:
+            version['text'] = apply_wiki_redirect(version['text'],
+                    redirects)
+
+
+def get_wiki(con, project_id, user_map):
+    wiki_id = get_wiki_id(con, project_id)
+    redirects = get_wiki_redirects(con, wiki_id)
+    pages = get_wiki_pages(con, wiki_id, user_map)
+    # map every link to the page slug
+    for (wid, page) in pages.items():
+        if not page['title'] == page['slug']:
+            redirects[page['title']] = page['slug']
+    apply_wiki_redirects(pages, redirects)
+    return pages
+
+
 def dump_project(project_name, verbose=False):
     try:
         con = open_database_connection()
@@ -393,11 +498,18 @@ def dump_project(project_name, verbose=False):
                 for (iid, issue) in board['issues'].items():
                     print("        {} {}".format(iid, issue['title']))
 
+        wiki = get_wiki(con, project_id, users)
+        if verbose:
+            print("Wiki")
+            for (wid, page) in wiki.items():
+                print("    {} {}".format(wid, page['slug']))
+
         data = {
             'users': users,
             'milestones': milestones,
             'issues': issues,
-            'boards': boards
+            'boards': boards,
+            'wiki': wiki
         }
         return data
 
