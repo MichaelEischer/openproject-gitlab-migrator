@@ -342,6 +342,10 @@ def create_issues(client, issues, milestone_map, user_map):
         add_relations(client, issues[str(iid)], gitlab_id)
 
 
+def get_issues(client):
+    return client.get('issues')
+
+
 def map_boards_to_milestones(boards):
     milestones = {}
     for (board_id, board) in boards.items():
@@ -449,46 +453,62 @@ def get_users(system_client):
     return user_map
 
 
+def open_clients(project_url, auth_token):
+    client = GitlabClient(
+        GitlabClient.project_to_api_url(args.project_url),
+        args.auth_token
+    )
+    system_client = GitlabClient(
+        GitlabClient.project_to_base_url(args.project_url),
+        args.auth_token
+    )
+    return client, system_client
+
+
 if __name__ == '__main__':
     # Copy attachments to file/<id>/<attachment>!
     parser = argparse.ArgumentParser()
+    parser.add_argument('action',
+        choices=('check-users', 'issues', 'wiki'))
     parser.add_argument('project_url')
     parser.add_argument('auth_token')
     parser.add_argument('source_file')
     args = parser.parse_args()
 
     data = load_data(args.source_file)
-    client = GitlabClient(
-        GitlabClient.project_to_api_url(args.project_url),
-        args.auth_token
-    )
+    client, system_client = open_clients(args.project_url,
+        args.auth_token)
 
-    # create milestones
-    create_milestones(client, data['milestones'])
-    milestone_map = get_milestone_map(client, data['milestones'])
+    if args.action in ('check-users', 'issues'):
+        # check for missing users for issues and boards
+        active_users = get_active_users(data['issues'], data['boards'])
+        user_map = get_users(system_client)
+        unknown_users = active_users - set(user_map.keys())
+        if len(unknown_users) > 0:
+            for user in sorted(unknown_users):
+                print('Unknown user {}'.format(user))
 
-    active_users = get_active_users(data['issues'], data['boards'])
-    system_client = GitlabClient(
-        GitlabClient.project_to_base_url(args.project_url),
-        args.auth_token
-    )
-    user_map = get_users(system_client)
-    unknown_users = active_users - set(user_map.keys())
-    if len(unknown_users) > 0:
-        for user in sorted(unknown_users):
-            print('Unknown user {}'.format(user))
+        DEFAULT_USER_ID = 1
+        spare_user_map = defaultdict(lambda: DEFAULT_USER_ID, user_map)
 
-    DEFAULT_USER_ID = 1
-    spare_user_map = defaultdict(lambda: DEFAULT_USER_ID, user_map)
-    create_issues(client, data['issues'], milestone_map,
-        spare_user_map)
+    if args.action in ('issues',):
+        assert len(get_issues(client)) == 0, "Project is not empty!"
 
-    board_milestones = map_boards_to_milestones(data['boards'])
-    create_milestones(client, board_milestones)
-    board_milestone_map = get_milestone_map(client, board_milestones)
-    convert_boards(client, data['boards'], board_milestone_map,
-        spare_user_map)
+        # create issues with milestones
+        create_milestones(client, data['milestones'])
+        milestone_map = get_milestone_map(client, data['milestones'])
+        create_issues(client, data['issues'], milestone_map,
+            spare_user_map)
 
-    project_name = os.path.splitext(
-        os.path.split(args.source_file)[1])[0]
-    convert_wiki(data['wiki'], project_name, data['users'])
+        # create issues + milestones for boards
+        board_milestones = map_boards_to_milestones(data['boards'])
+        create_milestones(client, board_milestones)
+        board_milestone_map = get_milestone_map(client, board_milestones)
+        convert_boards(client, data['boards'], board_milestone_map,
+            spare_user_map)
+
+    if args.action in ('wiki',):
+        # create wiki git
+        project_name = os.path.splitext(
+            os.path.split(args.source_file)[1])[0]
+        convert_wiki(data['wiki'], project_name, data['users'])
