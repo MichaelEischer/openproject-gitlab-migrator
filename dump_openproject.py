@@ -450,6 +450,44 @@ def get_wiki(con, project_id, user_map):
     return pages
 
 
+def get_meetings(con, project_id, user_map):
+    cur = con.cursor()
+    try:
+        cur.execute("SELECT m.`id`, m.`title`, m.`author_id`, "
+                "m.`start_time`, m.`duration`, c.`type`, c.`text`, "
+                "c.`created_at` "
+                "FROM `meetings` m "
+                "INNER JOIN `meeting_contents` c ON m.`id` = c.`meeting_id` "
+                "WHERE m.`project_id` = %s "
+                "ORDER BY m.`id` ASC",
+                (project_id,))
+        data = cur.fetchall()
+    finally:
+        cur.close()
+    pages = {}
+    for row in data:
+        if row[6] is None:
+            continue
+        if row[0] not in pages:
+            slug = 'meeting_{}'.format(row[3].date().isoformat())
+            # these can't change due to the query construction
+            pages[row[0]] = {
+                'slug': slug,
+                'title': row[1],
+                'versions': [],
+                'attachments': []
+            }
+        prefix = 'Start time: {}\nDuration: {}\n\n'.format(
+            row[3].isoformat(sep=' '), row[4]
+        )
+        pages[row[0]]['versions'].append({
+            'user_id': user_map[row[2]]['login'],
+            'created_at': row[7],
+            'text': prefix + row[6]
+        })
+    return pages
+
+
 def dump_project(project_name, verbose=False):
     try:
         con = open_database_connection()
@@ -503,6 +541,18 @@ def dump_project(project_name, verbose=False):
             print("Wiki")
             for (wid, page) in wiki.items():
                 print("    {} {}".format(wid, page['slug']))
+
+        meetings = get_meetings(con, project_id, users)
+        if verbose:
+            print("Meetings")
+            for (mid, page) in meetings.items():
+                print("    {} {}".format(mid, page['slug']))
+
+        pid = 1
+        for (mid, page) in meetings.items():
+            while pid in wiki:
+                pid += 1
+            wiki[pid] = page
 
         data = {
             'users': users,

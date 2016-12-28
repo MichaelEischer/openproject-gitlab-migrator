@@ -44,7 +44,6 @@ Forum:
 
 Dateianhänge:
   + attachments (old files are deleted from disk -> not available)
-  TODO: meeting attachments
 
 Wiki:
   + wikis -> project_id to wiki_id
@@ -52,4 +51,4 @@ Wiki:
   + wiki_content_journals + wiki_pages (Titel zu Name)
 
 Meetings:
-  meetings + meeting_contents + meeting_content_journals (-> Wikieinträge)
+  + meetings + meeting_contents (-> Wikieinträge)
