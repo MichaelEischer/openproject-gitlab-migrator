@@ -36,12 +36,12 @@ Forum:
 
 Dateianhänge:
   + attachments (old files are deleted from disk -> not available)
-  TODO: wiki / meeting attachments
+  TODO: meeting attachments
 
 Wiki:
   + wikis -> project_id to wiki_id
-  wiki_redirects ? -> direkt in Wiki-Artikel reinpatchen?
-  wiki_content_journals + wiki_pages (Titel zu Name)
+  + wiki_redirects -> direkt in Wiki-Artikel reinpatchen
+  + wiki_content_journals + wiki_pages (Titel zu Name)
 
 Meetings:
   meetings + meeting_contents + meeting_content_journals (-> Wikieinträge)

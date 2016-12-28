@@ -192,19 +192,36 @@ def upload_file(client, file):
     return result
 
 
-def create_attachments(client, attachments):
-    results = ['\n\n###### Attachments']
+def upload_attachments(client, attachments):
+    results = []
     for attachment in attachments:
         print("Uploading attachment {}".format(attachment['file']))
         ref = upload_file(client, attachment)
         desc = attachment['description']
         if desc is None:
             desc = ''
-        results.append('{}: {}\n  {}'.format(attachment['file'],
-            desc, ref['markdown']))
+        line = '{}: {}\n  {}'.format(attachment['file'],
+            desc, ref['markdown'])
+        results.append({
+            'file': attachment['file'],
+            'markdown': ref['markdown'],
+            'description': line
+        })
+    return results
+
+
+def make_attachement_str(uploaded_attachments):
+    results = ['\n\n###### Attachments']
+    for attachment in uploaded_attachments:
+        results.append(attachment['description'])
     if len(results) > 1:
         return '\n- '.join(results)
     return ''
+
+
+def create_attachments(client, attachments):
+    uploads = upload_attachments(client, attachments)
+    return make_attachement_str(uploads)
 
 
 def create_issue(client, issue, milestone_map, user_map):
@@ -396,6 +413,30 @@ class SimpleGitClient:
         self._run('gc', '--aggressive', '--quiet')
 
 
+def wiki_attachments_map(uploaded_attachments):
+    file_map = {}
+    for attachment in uploaded_attachments:
+        file_map[attachment['file']] = attachment['markdown']
+    return file_map
+
+
+EMBEDDED_ATTACHMENT_RE = re.compile(r'!\[\]\(([^\)]+)\)')
+ATTACHMENT_LINK_RE = re.compile(r'attachment:([^\s]+)')
+
+
+def insert_wiki_attachments(text, file_map):
+    # handle ![](aufbau.png)
+    def map_file(match):
+        fn = match.group(1).replace('\\_', '_')
+        if fn in file_map:
+            return file_map[fn]
+        else:
+            return match.group(0)
+    text = EMBEDDED_ATTACHMENT_RE.sub(map_file, text)
+    text = ATTACHMENT_LINK_RE.sub(map_file, text)
+    return text
+
+
 def convert_wiki(wiki, project_name, users):
     user_map = {}
     for user in users.values():
@@ -403,6 +444,11 @@ def convert_wiki(wiki, project_name, users):
 
     repo = SimpleGitClient('{}.wiki.git'.format(project_name))
     for (wid, page) in wiki.items():
+        # handle attachments
+        uploads = upload_attachments(client, page['attachments'])
+        file_map = wiki_attachments_map(uploads)
+        attachment_str = make_attachement_str(uploads)
+
         fn = '{}.md'.format(page['slug'])
         title = page['title']
         # only add the title if it provides additional information
@@ -413,6 +459,8 @@ def convert_wiki(wiki, project_name, users):
         print('Wiki page {}'.format(page['slug']))
         for version in page['versions']:
             text = fix_wiki_links(convert_description(version['text']))
+            text = insert_wiki_attachments(text, file_map)
+            text += attachment_str
             if title is not None:
                 text = '# {}\n{}'.format(title, text)
             if text == last_text:
