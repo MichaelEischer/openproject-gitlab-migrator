@@ -1,14 +1,22 @@
 Dependencies:
+- git
 - pandoc (use something relatively current!)
 - python3
 - python3-mysql-connector
 
 Migrationsablauf:
 - Gruppen + Projekte erstellen, Default-Labels erstellen!
+- Default Labels:
+  - bug / confirmed / critical (red)
+  - discussion / suggestion (blue)
+  - documentation / support (yellow)
+  - enhancement (green)
+  - Boards: To Do (yellow) / Doing (green)
+
 - Benutzer erstellen, temporär als Admin setzen
-- Attachments kopieren
-- Git-Repository befüllen!
-- Importieren :-)
+- Alle! Attachments nach file/<id>/<attachment> kopieren
+- Git-Repository befüllen! (ggf. LFS-Konvertierung!)
+- Issues importieren, Wiki konvertieren und hochladen
 - Admin-Berechtigungen zurücksetzen!
 
 Interessante Tabellen:
