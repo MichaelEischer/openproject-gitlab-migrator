@@ -241,7 +241,7 @@ def create_issue(client, issue, milestone_map, user_map):
     data = {
         'title': issue['title'],
         'description': convert_description(issue['description']),
-        'assignee_id': user_map.get(issue['assignee_id']),
+        'assignee_id': user_map[issue['assignee_id']],
         'milestone_id': milestone_map.get(issue['milestone_id']),
         'labels': ','.join(issue['labels']),
         'created_at': issue['created_at'],
@@ -258,33 +258,41 @@ def create_issue(client, issue, milestone_map, user_map):
 
     last_description = issue['description']
     for action in issue['actions']:
-        is_only_note = set(action.keys()) == set(
-            ('author_id', 'created_at', 'notes'))
+        is_only_note = len(set(action.keys()) - set(
+            ('author_id', 'created_at', 'notes', 'attachments'))) == 0
         if not is_only_note:
             data = {
-                'title': action.get('title'),
-                'description': action.get('description'),
-                'assignee_id': user_map.get(
-                    action.get('assignee_id')),
-                'milestone_id': milestone_map.get(
-                    action.get('milestone_id')),
-                'updated_at': action['created_at'],
-                'due_date': action.get('due_date')
+                'updated_at': action['created_at']
             }
+            if 'title' in action:
+                data['title'] = action['title']
+            if 'description' in action:
+                data['description'] = action['description']
+            if 'due_date' in action:
+                data['due_date'] = action['due_date']
+            if 'milestone_id' in action:
+                data['milestone_id'] = milestone_map[action['milestone_id']]
+            if 'assignee_id' in action:
+                data['assignee_id'] = user_map[action['assignee_id']]
             if 'labels' in action:
                 data['labels'] = ','.join(action['labels'])
             if 'is_closed' in action:
                 data['state_event'] = 'close' if action['is_closed'] \
                     else 'reopen'
-            if data['description'] is not None:
+            if 'description' in data:
+                # convert description
                 data['description'] = convert_description(data['description'])
+                # store before it may be overwritten by start_date
                 last_description = data['description']
             if 'start_date' in action:
                 start_date_str = '\n\n###### Start date\n' + \
                     issue['start_date']
                 data['description'] = last_description
-            if data['description'] is not None:
+            if 'description' in data:
                 data['description'] += start_date_str + attachment_str
+            for (key, value) in data.items():
+                if value is None:
+                    data[key] = ''
 
             client.put(
                 'issues/{}'.format(result['id']),
