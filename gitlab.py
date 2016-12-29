@@ -491,8 +491,8 @@ def get_issue_users(issues, users):
         users.add(issue['assignee_id'])
         users.update(issue['watcher_ids'])
         for action in issue['actions']:
-            users.add(issue['author_id'])
-            users.add(issue.get('assignee_id'))
+            users.add(action['author_id'])
+            users.add(action.get('assignee_id'))
 
 
 def get_active_users(issues, boards):
