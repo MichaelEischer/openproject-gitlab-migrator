@@ -261,6 +261,14 @@ def create_issue(client, issue, milestone_map, user_map):
         data=data,
         headers={'SUDO': user_map[issue['author_id']]}
     )
+    if issue['is_closed']:
+        result = client.put(
+            'issues/{}'.format(result['id']),
+            data={
+                'state_event': 'close'
+            },
+            headers={'SUDO': user_map[issue['author_id']]}
+        )
 
     last_description = issue['description']
     for action in issue['actions']:
