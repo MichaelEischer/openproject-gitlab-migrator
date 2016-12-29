@@ -447,6 +447,8 @@ def insert_wiki_attachments(text, file_map):
 
 
 def convert_wiki(wiki, project_name, users):
+    if len(wiki.items()) == 0:
+        return
     user_map = {}
     for user in users.values():
         user_map[user['login']] = user
