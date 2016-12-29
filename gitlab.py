@@ -231,6 +231,12 @@ def create_attachments(client, attachments):
     return make_attachement_str(uploads)
 
 
+def map_user_id(user_id, user_map):
+    if user_id is None:
+        return None
+    return user_map[user_id]
+
+
 def create_issue(client, issue, milestone_map, user_map):
     attachment_str = create_attachments(client, issue['attachments'])
     start_date_str = ''
@@ -241,7 +247,7 @@ def create_issue(client, issue, milestone_map, user_map):
     data = {
         'title': issue['title'],
         'description': convert_description(issue['description']),
-        'assignee_id': user_map[issue['assignee_id']],
+        'assignee_id': map_user_id(issue['assignee_id'], user_map),
         'milestone_id': milestone_map.get(issue['milestone_id']),
         'labels': ','.join(issue['labels']),
         'created_at': issue['created_at'],
@@ -271,9 +277,11 @@ def create_issue(client, issue, milestone_map, user_map):
             if 'due_date' in action:
                 data['due_date'] = action['due_date']
             if 'milestone_id' in action:
-                data['milestone_id'] = milestone_map[action['milestone_id']]
+                data['milestone_id'] = milestone_map.get(
+                    action['milestone_id'])
             if 'assignee_id' in action:
-                data['assignee_id'] = user_map[action['assignee_id']]
+                data['assignee_id'] = map_user_id(
+                    issue['assignee_id'], user_map)
             if 'labels' in action:
                 data['labels'] = ','.join(action['labels'])
             if 'is_closed' in action:
