@@ -112,7 +112,14 @@ class GitlabClient:
         headers['PRIVATE-TOKEN'] = self.auth_token
         kwargs['headers'] = headers
         response = method(url, **kwargs)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except Exception as e:
+            print(url)
+            print(kwargs)
+            print(response)
+            print(response.text)
+            raise e
         return response.json()
 
     def delete(self, address, **kwargs):
