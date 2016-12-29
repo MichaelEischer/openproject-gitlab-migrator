@@ -354,6 +354,24 @@ def add_relations(client, issue, issue_id):
         client.put(issue_url, data=result)
 
 
+def get_issue_last_updated(issue):
+    issue_time = issue['created_at']
+    if issue['actions']:
+        issue_time = issue['actions'][-1]['created_at']
+    return issue_time
+
+
+def fix_last_updated_time(client, issue, issue_id):
+    issue_time = get_issue_last_updated(issue)
+    issue_url = 'issues/{}'.format(issue_id)
+    result = client.get(issue_url)
+    result = {
+        'title': result['title'],
+        'updated_at': issue_time
+    }
+    client.put(issue_url, data=result)
+
+
 def pad_issue_id(next_id, last_id):
     while last_id + 1 < next_id:
         result = client.post('issues', data={'title': 'TMP'})
@@ -380,8 +398,13 @@ def create_issues(client, issues, milestone_map, user_map):
         id_map[iid] = gitlab_id
         last_id = iid
 
+    print('Adding relations')
     for (iid, gitlab_id) in id_map.items():
         add_relations(client, issues[str(iid)], gitlab_id)
+
+    print('Fix last updated times')
+    for (iid, gitlab_id) in id_map.items():
+        fix_last_updated_time(client, issues[str(iid)], gitlab_id)
 
 
 def get_issues(client):
@@ -406,7 +429,9 @@ def convert_board(client, board, milestone_map, user_map):
     for iid in sorted([int(i) for i in board.keys()]):
         issue = board[str(iid)]
         print('Creating board issue {}'.format(iid))
-        create_issue(client, issue, milestone_map, user_map)
+        (gitlab_id, gitlab_iid) = create_issue(client, issue,
+            milestone_map, user_map)
+        fix_last_updated_time(client, issue, gitlab_id)
 
 
 def convert_boards(client, boards, milestone_map, user_map):
