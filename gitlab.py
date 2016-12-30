@@ -360,7 +360,11 @@ def add_relations(client, issue, issue_id):
             'description': result['description'] + '\n- '.join(relations_text),
             'updated_at': result['updated_at']
         }
-        client.put(issue_url, data=result)
+        client.put(
+            issue_url,
+            data=result,
+            headers={'SUDO': user_map[issue['author_id']]}
+        )
 
 
 def get_issue_last_updated(issue):
