@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import argparse
+import base64
 import json
-import os.path
+import os
 import re
 import requests
 import subprocess
@@ -561,6 +562,54 @@ def get_users(system_client):
     return user_map
 
 
+def get_full_users(system_client):
+    result = system_client.get('users')
+    full_users = {}
+    for user in result:
+        full_users[user['username']] = user
+    return full_users
+
+
+def create_user(system_client, user):
+    password = base64.b64encode(os.urandom(20))
+    data = {
+        'email': user['mail'],
+        'password': password,
+        'username': user['login'],
+        'name': user['name'],
+        'confirm': False
+    }
+    system_client.post('users', data=data)
+
+
+def create_users(system_client, unknown_users, users):
+    for user in users.values():
+        if user['login'] not in unknown_users:
+            continue
+        print('Creating user {}'.format(user['login']))
+        create_user(system_client, user)
+
+
+def set_user_admin(system_client, user_id, is_admin):
+    system_client.put('users/{}'.format(user_id),
+        data={'admin': is_admin}
+    )
+
+
+def set_all_admin(system_client, active_users, user_map):
+    for (login, uid) in user_map.items():
+        if login not in active_users:
+            continue
+        set_user_admin(system_client, uid, True)
+
+
+def restore_admin(system_client, active_users, full_users):
+    for user in full_users.values():
+        if user['username'] not in active_users:
+            continue
+        set_user_admin(system_client, user['id'], user['is_admin'])
+
+
 def open_clients(project_url, auth_token):
     client = GitlabClient(
         GitlabClient.project_to_api_url(args.project_url),
@@ -577,7 +626,7 @@ if __name__ == '__main__':
     # Copy attachments to file/<id>/<attachment>!
     parser = argparse.ArgumentParser()
     parser.add_argument('action',
-        choices=('check-users', 'issues', 'wiki'))
+        choices=('check-users', 'create-users', 'issues', 'wiki'))
     parser.add_argument('project_url')
     parser.add_argument('auth_token')
     parser.add_argument('source_file')
@@ -587,20 +636,31 @@ if __name__ == '__main__':
     client, system_client = open_clients(args.project_url,
         args.auth_token)
 
-    if args.action in ('check-users', 'issues'):
+    if args.action in ('check-users', 'create-users', 'issues'):
         # check for missing users for issues and boards
         active_users = get_active_users(data['issues'], data['boards'])
         user_map = get_users(system_client)
         unknown_users = active_users - set(user_map.keys())
-        if len(unknown_users) > 0:
+        if args.action == 'check-users' and len(unknown_users) > 0:
             for user in sorted(unknown_users):
                 print('Unknown user {}'.format(user))
 
-        DEFAULT_USER_ID = 1
-        spare_user_map = defaultdict(lambda: DEFAULT_USER_ID, user_map)
+    if args.action in ('create-users',):
+        # create missing users
+        create_users(system_client, unknown_users, data['users'])
 
     if args.action in ('issues',):
+        assert len(unknown_users) == 0, "Missing users"
         assert len(get_issues(client)) == 0, "Project is not empty!"
+
+        # give admin privileges to all involved users
+        # required for setting the timestamps
+        print("Handing out admin privileges")
+        full_users = get_full_users(system_client)
+        set_all_admin(system_client, active_users, user_map)
+
+        DEFAULT_USER_ID = 1
+        spare_user_map = defaultdict(lambda: DEFAULT_USER_ID, user_map)
 
         # create issues with milestones
         create_milestones(client, data['milestones'])
@@ -614,6 +674,9 @@ if __name__ == '__main__':
         board_milestone_map = get_milestone_map(client, board_milestones)
         convert_boards(client, data['boards'], board_milestone_map,
             spare_user_map)
+
+        print("Resetting admin privileges")
+        restore_admin(system_client, active_users, full_users)
 
     if args.action in ('wiki',):
         # create wiki git
