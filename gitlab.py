@@ -127,7 +127,10 @@ class GitlabClient:
         return self._request(requests.delete, address, **kwargs)
 
     def get(self, address, **kwargs):
-        # FIXME handle pagination???
+        # FIXME properly handle pagination???
+        params = kwargs.get('params', {})
+        params['per_page'] = 100
+        kwargs['params'] = params
         return self._request(requests.get, address, **kwargs)
 
     def post(self, address, **kwargs):
