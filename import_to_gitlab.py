@@ -584,7 +584,10 @@ def create_user(system_client, user):
         'password': password,
         'username': user['login'],
         'name': user['name'],
-        'confirm': False
+        'confirm': False,
+        # 'provider': 'ldapmain',
+        # 'extern_uid': 'uid={},cn=users,dc=domain,dc=of,dc=ldap'
+        # .format(user['login'])
     }
     system_client.post('users', data=data)
 

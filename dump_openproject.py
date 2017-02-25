@@ -6,10 +6,9 @@ import mysql.connector
 import re
 
 
-def open_database_connection():
-    return mysql.connector.connect(user='openproject',
-            password='password', database='openproject',
-            host='localhost')
+def open_database_connection(db_host, db_user, db_pwd, db_database):
+    return mysql.connector.connect(user=db_user, password=db_pwd,
+            database=db_database, host=db_host)
 
 
 def get_users(con):
@@ -488,9 +487,8 @@ def get_meetings(con, project_id, user_map):
     return pages
 
 
-def dump_project(project_name, verbose=False):
+def dump_project(con, project_name, verbose=False):
     try:
-        con = open_database_connection()
         users = get_users(con)
         if verbose:
             print("Found {} users".format(len(users)))
@@ -585,7 +583,13 @@ def write_data(fn, data):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('project_name')
+    parser.add_argument('db_host')
+    parser.add_argument('db_user')
+    parser.add_argument('db_pwd')
+    parser.add_argument('db_database')
     args = parser.parse_args()
 
-    data = dump_project(args.project_name, True)
+    con = open_database_connection(args.db_host, args.db_user, args.db_pwd,
+            args.db_database)
+    data = dump_project(con, args.project_name, True)
     write_data(args.project_name + '.json', data)
